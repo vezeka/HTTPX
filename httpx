@@ -1,0 +1,39 @@
+#!/bin/bash
+
+input_file=$1
+
+# Nom de base pour le fichier de sortie et le fichier d'erreur
+base_output_file="$HOME/Recon/Target/httpx_results"
+error_log="$HOME/Recon/Target/httpx_error.log"
+
+# Créer le répertoire de sortie s'il n'existe pas
+mkdir -p $HOME/Recon/Target
+
+# Vérifier si le fichier de sortie existe déjà et trouver un nom unique
+counter=0
+output_file="${base_output_file}.txt"
+
+while [ -f "$output_file" ]; do
+  counter=$((counter + 1))
+  output_file="${base_output_file}_${counter}.txt"
+done
+
+# Déclarer un tableau associatif pour stocker les URL par code de statut
+declare -A status_map
+
+# Lire le fichier d'entrée ligne par ligne et exécuter httpx
+while read -r line; do
+  status=$(httpx -v "$line" 2>&1 | grep -oP 'HTTP/\d\.\d \K\d+')
+  if [[ -n "$status" ]]; then
+    status_map["$status"]+="$line\n"
+  fi
+done < "$input_file"
+
+# Écrire les résultats triés dans le fichier final
+> "$output_file"
+for status in $(echo "${!status_map[@]}" | tr ' ' '\n' | sort -n); do
+  echo -e "\n=== Code de statut: $status ===\n" >> "$output_file"
+  echo -e "${status_map[$status]}" >> "$output_file"
+done
+
+echo "Terminé. Les résultats sont enregistrés dans $output_file et les erreurs dans $error_log."
